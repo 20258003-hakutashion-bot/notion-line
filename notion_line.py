@@ -13,7 +13,7 @@ LINE_TOKEN = os.environ["LINE_TOKEN"]
 
 DATABASE_ID = "3dd984275b318016b87ac407900eb39a"
 
-# 5分ごとにNotionを確認
+# 1分ごとにNotionを確認
 CHECK_INTERVAL = 60
 
 app = Flask(__name__)
@@ -42,6 +42,7 @@ def check_notion():
     }
 
     try:
+
         response = requests.post(
             notion_url,
             headers=notion_headers,
@@ -100,9 +101,34 @@ def check_notion():
             for item in body_data:
                 body += item["plain_text"]
 
+            # =========================
+            # リンク・ファイル取得
+            # =========================
+
+            file_data = properties["リンク、ファイル"]["files"]
+
+            detail_url = None
+
+            if file_data:
+
+                # 最初に登録されている
+                # リンクまたはファイルを使用
+                first_file = file_data[0]
+
+                # 外部URLの場合
+                if first_file.get("type") == "external":
+
+                    detail_url = first_file["external"]["url"]
+
+                # Notionにアップロードしたファイルの場合
+                elif first_file.get("type") == "file":
+
+                    detail_url = first_file["file"]["url"]
+
             print("新しいお知らせを発見！")
             print("タイトル:", title)
             print("本文:", body)
+            print("詳細URL:", detail_url)
 
             # =========================
             # LINEへ一斉送信
@@ -114,6 +140,91 @@ def check_notion():
                 "Authorization": f"Bearer {LINE_TOKEN}",
                 "Content-Type": "application/json"
             }
+
+            # =========================
+            # 詳細を見るボタン
+            # =========================
+
+            contents = [
+
+                # 見出し
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "alignItems": "center",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "📢",
+                            "size": "xxl",
+                            "flex": 0
+                        },
+                        {
+                            "type": "text",
+                            "text": "新着お知らせ",
+                            "weight": "bold",
+                            "size": "xl",
+                            "color": "#333333",
+                            "margin": "md"
+                        }
+                    ]
+                },
+
+                # 区切り線
+                {
+                    "type": "separator",
+                    "margin": "xl"
+                },
+
+                # タイトル
+                {
+                    "type": "text",
+                    "text": title,
+                    "weight": "bold",
+                    "size": "xl",
+                    "color": "#333333",
+                    "margin": "xl",
+                    "wrap": True
+                },
+
+                # 本文
+                {
+                    "type": "text",
+                    "text": body,
+                    "size": "md",
+                    "color": "#555555",
+                    "margin": "lg",
+                    "wrap": True
+                }
+            ]
+
+            # =========================
+            # リンク・ファイルがある場合
+            # =========================
+
+            if detail_url:
+
+                contents.append(
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "color": "#06C755",
+                        "margin": "xl",
+                        "action": {
+                            "type": "uri",
+                            "label": "詳細を見る",
+                            "uri": detail_url
+                        }
+                    }
+                )
+
+            else:
+
+                print("リンク、ファイルが設定されていません。")
+
+            # =========================
+            # LINEメッセージ
+            # =========================
 
             line_data = {
                 "messages": [
@@ -130,76 +241,16 @@ def check_notion():
                                 "spacing": "lg",
                                 "paddingAll": "lg",
 
-                                "contents": [
-
-                                    # 見出し
-                                    {
-                                        "type": "box",
-                                        "layout": "horizontal",
-                                        "alignItems": "center",
-                                        "contents": [
-                                            {
-                                                "type": "text",
-                                                "text": "📢",
-                                                "size": "xxl",
-                                                "flex": 0
-                                            },
-                                            {
-                                                "type": "text",
-                                                "text": "新着お知らせ",
-                                                "weight": "bold",
-                                                "size": "xl",
-                                                "color": "#333333",
-                                                "margin": "md"
-                                            }
-                                        ]
-                                    },
-
-                                    # 区切り線
-                                    {
-                                        "type": "separator",
-                                        "margin": "xl"
-                                    },
-
-                                    # タイトル
-                                    {
-                                        "type": "text",
-                                        "text": title,
-                                        "weight": "bold",
-                                        "size": "xl",
-                                        "color": "#333333",
-                                        "margin": "xl",
-                                        "wrap": True
-                                    },
-
-                                    # 本文
-                                    {
-                                        "type": "text",
-                                        "text": body,
-                                        "size": "md",
-                                        "color": "#555555",
-                                        "margin": "lg",
-                                        "wrap": True
-                                    },
-
-                                    # 詳細を見る
-                                    {
-                                        "type": "button",
-                                        "style": "primary",
-                                        "color": "#06C755",
-                                        "margin": "xl",
-                                        "action": {
-                                            "type": "uri",
-                                            "label": "詳細を見る",
-                                            "uri": "https://kikusui-net.com/news/"
-                                        }
-                                    }
-                                ]
+                                "contents": contents
                             }
                         }
                     }
                 ]
             }
+
+            # =========================
+            # LINE送信
+            # =========================
 
             line_response = requests.post(
                 line_url,
@@ -242,15 +293,18 @@ def check_notion():
                 )
 
                 if update_response.status_code == 200:
+
                     print("通知完了！")
 
                 else:
+
                     print(
                         "Notion更新エラー:",
                         update_response.text
                     )
 
     except Exception as e:
+
         print("エラー:", e)
 
 
