@@ -49,7 +49,7 @@ def check_notion():
         response = requests.post(
             notion_url,
             headers=notion_headers,
-            timeout=(10, 30)
+            timeout=10
         )
 
         print("Notion APIから返事が来ました！")
