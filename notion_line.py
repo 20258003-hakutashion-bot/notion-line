@@ -43,13 +43,16 @@ def check_notion():
 
     try:
 
-        response = requests.post(
-            notion_url,
-            headers=notion_headers,
-            timeout=30
-        )
+    print("Notion APIへ接続します...")
 
-        print("Notion Status:", response.status_code)
+    response = requests.post(
+        notion_url,
+        headers=notion_headers,
+        timeout=30
+    )
+
+    print("Notion APIから返事が来ました！")
+    print("Notion Status:", response.status_code)
 
         if response.status_code != 200:
             print("Notion Response:", response.text)
