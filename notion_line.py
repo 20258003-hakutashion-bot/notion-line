@@ -18,6 +18,7 @@ CHECK_INTERVAL = 60
 
 app = Flask(__name__)
 
+
 # =========================
 # Webサーバー
 # =========================
@@ -41,294 +42,306 @@ def check_notion():
         "Content-Type": "application/json"
     }
 
+    print("Notion APIへ接続します...")
+
     try:
-        print("Notion APIへ接続します...")
 
-        print("Notion APIへ接続します...")
-
-try:
-    response = requests.post(
-        notion_url,
-        headers=notion_headers,
-        timeout=(10, 30)
-    )
-
-    print("Notion APIから返事が来ました！")
-    print("Notion Status:", response.status_code)
-
-except requests.exceptions.ConnectTimeout:
-    print("Notion APIへの接続がタイムアウトしました")
-
-except requests.exceptions.ReadTimeout:
-    print("Notion APIからの返事がタイムアウトしました")
-
-except requests.exceptions.RequestException as e:
-    print("Notion API通信エラー:", e)
-
-    return
+        response = requests.post(
+            notion_url,
+            headers=notion_headers,
+            timeout=(10, 30)
+        )
 
         print("Notion APIから返事が来ました！")
         print("Notion Status:", response.status_code)
 
-        if response.status_code != 200:
-            print("Notion Response:", response.text)
-            return
+    except requests.exceptions.ConnectTimeout:
 
-        if response.status_code != 200:
-            print("Notion Response:", response.text)
-            return
+        print("Notion APIへの接続がタイムアウトしました")
+        return
 
-        data = response.json()
+    except requests.exceptions.ReadTimeout:
+
+        print("Notion APIからの返事がタイムアウトしました")
+        return
+
+    except requests.exceptions.RequestException as e:
+
+        print("Notion API通信エラー:", e)
+        return
+
+    if response.status_code != 200:
+
+        print("Notion Response:", response.text)
+        return
+
+    data = response.json()
+
+    # =========================
+    # お知らせを確認
+    # =========================
+
+    for page in data.get("results", []):
+
+        properties = page["properties"]
+
+        line_check = properties["LINEに通知を入れるか"]["checkbox"]
+        notified = properties["通知済み"]["checkbox"]
+
+        # LINE通知しない
+        if not line_check:
+            continue
+
+        # すでに通知済み
+        if notified:
+            continue
 
         # =========================
-        # お知らせを確認
+        # タイトル取得
         # =========================
 
-        for page in data.get("results", []):
+        title_data = properties["タイトル"]["title"]
 
-            properties = page["properties"]
+        title = ""
 
-            line_check = properties["LINEに通知を入れるか"]["checkbox"]
-            notified = properties["通知済み"]["checkbox"]
+        if title_data:
 
-            # LINE通知しない
-            if not line_check:
-                continue
+            title = "".join(
+                item["plain_text"]
+                for item in title_data
+            )
 
-            # すでに通知済み
-            if notified:
-                continue
+        # =========================
+        # 本文取得
+        # =========================
 
-            # =========================
-            # タイトル取得
-            # =========================
+        body_data = properties["本文"]["rich_text"]
 
-            title_data = properties["タイトル"]["title"]
+        body = ""
 
-            title = ""
+        for item in body_data:
 
-            if title_data:
-                title = "".join(
-                    item["plain_text"]
-                    for item in title_data
-                )
+            body += item["plain_text"]
 
-            # =========================
-            # 本文取得
-            # =========================
+        # =========================
+        # リンク・ファイル取得
+        # =========================
 
-            body_data = properties["本文"]["rich_text"]
+        file_data = properties["リンク、ファイル"]["files"]
 
-            body = ""
+        detail_url = None
 
-            for item in body_data:
-                body += item["plain_text"]
+        if file_data:
 
-            # =========================
-            # リンク・ファイル取得
-            # =========================
+            first_file = file_data[0]
 
-            file_data = properties["リンク、ファイル"]["files"]
+            # 外部URL
+            if first_file.get("type") == "external":
 
-            detail_url = None
+                detail_url = first_file["external"]["url"]
 
-            if file_data:
+            # Notionにアップロードしたファイル
+            elif first_file.get("type") == "file":
 
-                # 最初に登録されている
-                # リンクまたはファイルを使用
-                first_file = file_data[0]
+                detail_url = first_file["file"]["url"]
 
-                # 外部URLの場合
-                if first_file.get("type") == "external":
+        print("新しいお知らせを発見！")
+        print("タイトル:", title)
+        print("本文:", body)
+        print("詳細URL:", detail_url)
 
-                    detail_url = first_file["external"]["url"]
+        # =========================
+        # LINEへ一斉送信
+        # =========================
 
-                # Notionにアップロードしたファイルの場合
-                elif first_file.get("type") == "file":
+        line_url = "https://api.line.me/v2/bot/message/broadcast"
 
-                    detail_url = first_file["file"]["url"]
+        line_headers = {
+            "Authorization": f"Bearer {LINE_TOKEN}",
+            "Content-Type": "application/json"
+        }
 
-            print("新しいお知らせを発見！")
-            print("タイトル:", title)
-            print("本文:", body)
-            print("詳細URL:", detail_url)
+        # =========================
+        # Flexメッセージ
+        # =========================
 
-            # =========================
-            # LINEへ一斉送信
-            # =========================
+        contents = [
 
-            line_url = "https://api.line.me/v2/bot/message/broadcast"
+            # 見出し
+            {
+                "type": "box",
+                "layout": "horizontal",
+                "alignItems": "center",
+                "contents": [
 
-            line_headers = {
-                "Authorization": f"Bearer {LINE_TOKEN}",
-                "Content-Type": "application/json"
+                    {
+                        "type": "text",
+                        "text": "📢",
+                        "size": "xxl",
+                        "flex": 0
+                    },
+
+                    {
+                        "type": "text",
+                        "text": "新着お知らせ",
+                        "weight": "bold",
+                        "size": "xl",
+                        "color": "#333333",
+                        "margin": "md"
+                    }
+
+                ]
+            },
+
+            # 区切り線
+            {
+                "type": "separator",
+                "margin": "xl"
+            },
+
+            # タイトル
+            {
+                "type": "text",
+                "text": title,
+                "weight": "bold",
+                "size": "xl",
+                "color": "#333333",
+                "margin": "xl",
+                "wrap": True
+            },
+
+            # 本文
+            {
+                "type": "text",
+                "text": body,
+                "size": "md",
+                "color": "#555555",
+                "margin": "lg",
+                "wrap": True
             }
 
-            # =========================
-            # 詳細を見るボタン
-            # =========================
+        ]
 
-            contents = [
+        # =========================
+        # 詳細を見るボタン
+        # =========================
 
-                # 見出し
+        if detail_url:
+
+            contents.append(
                 {
-                    "type": "box",
-                    "layout": "horizontal",
-                    "alignItems": "center",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "📢",
-                            "size": "xxl",
-                            "flex": 0
-                        },
-                        {
-                            "type": "text",
-                            "text": "新着お知らせ",
-                            "weight": "bold",
-                            "size": "xl",
-                            "color": "#333333",
-                            "margin": "md"
-                        }
-                    ]
-                },
-
-                # 区切り線
-                {
-                    "type": "separator",
-                    "margin": "xl"
-                },
-
-                # タイトル
-                {
-                    "type": "text",
-                    "text": title,
-                    "weight": "bold",
-                    "size": "xl",
-                    "color": "#333333",
+                    "type": "button",
+                    "style": "primary",
+                    "color": "#06C755",
                     "margin": "xl",
-                    "wrap": True
-                },
-
-                # 本文
-                {
-                    "type": "text",
-                    "text": body,
-                    "size": "md",
-                    "color": "#555555",
-                    "margin": "lg",
-                    "wrap": True
+                    "action": {
+                        "type": "uri",
+                        "label": "詳細を見る",
+                        "uri": detail_url
+                    }
                 }
+            )
+
+        else:
+
+            print("リンク、ファイルが設定されていません。")
+
+        # =========================
+        # LINEメッセージ
+        # =========================
+
+        line_data = {
+
+            "messages": [
+
+                {
+                    "type": "flex",
+
+                    "altText": f"📢 新着お知らせ：{title}",
+
+                    "contents": {
+
+                        "type": "bubble",
+
+                        "size": "mega",
+
+                        "body": {
+
+                            "type": "box",
+                            "layout": "vertical",
+                            "spacing": "lg",
+                            "paddingAll": "lg",
+
+                            "contents": contents
+
+                        }
+
+                    }
+
+                }
+
             ]
 
-            # =========================
-            # リンク・ファイルがある場合
-            # =========================
+        }
 
-            if detail_url:
+        # =========================
+        # LINE送信
+        # =========================
 
-                contents.append(
-                    {
-                        "type": "button",
-                        "style": "primary",
-                        "color": "#06C755",
-                        "margin": "xl",
-                        "action": {
-                            "type": "uri",
-                            "label": "詳細を見る",
-                            "uri": detail_url
-                        }
+        line_response = requests.post(
+            line_url,
+            headers=line_headers,
+            json=line_data,
+            timeout=30
+        )
+
+        print("LINE Status:", line_response.status_code)
+        print("LINE Response:", line_response.text)
+
+        # =========================
+        # LINE送信成功なら通知済みにする
+        # =========================
+
+        if line_response.status_code == 200:
+
+            page_id = page["id"]
+
+            update_url = f"https://api.notion.com/v1/pages/{page_id}"
+
+            update_data = {
+
+                "properties": {
+
+                    "通知済み": {
+                        "checkbox": True
                     }
-                )
 
-            else:
+                }
 
-                print("リンク、ファイルが設定されていません。")
-
-            # =========================
-            # LINEメッセージ
-            # =========================
-
-            line_data = {
-                "messages": [
-                    {
-                        "type": "flex",
-                        "altText": f"📢 新着お知らせ：{title}",
-                        "contents": {
-                            "type": "bubble",
-                            "size": "mega",
-
-                            "body": {
-                                "type": "box",
-                                "layout": "vertical",
-                                "spacing": "lg",
-                                "paddingAll": "lg",
-
-                                "contents": contents
-                            }
-                        }
-                    }
-                ]
             }
 
-            # =========================
-            # LINE送信
-            # =========================
-
-            line_response = requests.post(
-                line_url,
-                headers=line_headers,
-                json=line_data,
+            update_response = requests.patch(
+                update_url,
+                headers=notion_headers,
+                json=update_data,
                 timeout=30
             )
 
-            print("LINE Status:", line_response.status_code)
-            print("LINE Response:", line_response.text)
+            print(
+                "Notion通知済み更新:",
+                update_response.status_code
+            )
 
-            # =========================
-            # LINE送信成功なら通知済みにする
-            # =========================
+            if update_response.status_code == 200:
 
-            if line_response.status_code == 200:
+                print("通知完了！")
 
-                page_id = page["id"]
-
-                update_url = f"https://api.notion.com/v1/pages/{page_id}"
-
-                update_data = {
-                    "properties": {
-                        "通知済み": {
-                            "checkbox": True
-                        }
-                    }
-                }
-
-                update_response = requests.patch(
-                    update_url,
-                    headers=notion_headers,
-                    json=update_data,
-                    timeout=30
-                )
+            else:
 
                 print(
-                    "Notion通知済み更新:",
-                    update_response.status_code
+                    "Notion更新エラー:",
+                    update_response.text
                 )
-
-                if update_response.status_code == 200:
-
-                    print("通知完了！")
-
-                else:
-
-                    print(
-                        "Notion更新エラー:",
-                        update_response.text
-                    )
-
-    except Exception as e:
-
-        print("エラー:", e)
 
 
 # =========================
@@ -345,7 +358,9 @@ def monitoring():
 
         check_notion()
 
-        print(f"{CHECK_INTERVAL}秒後に再確認します。")
+        print(
+            f"{CHECK_INTERVAL}秒後に再確認します。"
+        )
 
         time.sleep(CHECK_INTERVAL)
 
