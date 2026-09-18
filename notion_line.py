@@ -274,23 +274,12 @@ def monitoring():
 
 
 # =========================
-# 起動
+# Render起動時にNotion監視開始
 # =========================
 
-if __name__ == "__main__":
+thread = threading.Thread(
+    target=monitoring,
+    daemon=True
+)
 
-    # バックグラウンドでNotion監視開始
-    thread = threading.Thread(
-        target=monitoring,
-        daemon=True
-    )
-
-    thread.start()
-
-    # Render用Webサーバー
-    port = int(os.environ.get("PORT", 10000))
-
-    app.run(
-        host="0.0.0.0",
-        port=port
-    )
+thread.start()
