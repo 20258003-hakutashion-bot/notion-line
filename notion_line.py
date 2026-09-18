@@ -44,11 +44,28 @@ def check_notion():
     try:
         print("Notion APIへ接続します...")
 
-        response = requests.post(
-            notion_url,
-            headers=notion_headers,
-            timeout=30
-        )
+        print("Notion APIへ接続します...")
+
+try:
+    response = requests.post(
+        notion_url,
+        headers=notion_headers,
+        timeout=(10, 30)
+    )
+
+    print("Notion APIから返事が来ました！")
+    print("Notion Status:", response.status_code)
+
+except requests.exceptions.ConnectTimeout:
+    print("Notion APIへの接続がタイムアウトしました")
+
+except requests.exceptions.ReadTimeout:
+    print("Notion APIからの返事がタイムアウトしました")
+
+except requests.exceptions.RequestException as e:
+    print("Notion API通信エラー:", e)
+
+    return
 
         print("Notion APIから返事が来ました！")
         print("Notion Status:", response.status_code)
