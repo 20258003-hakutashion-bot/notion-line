@@ -14,7 +14,7 @@ LINE_TOKEN = os.environ["LINE_TOKEN"]
 DATABASE_ID = "3dd984275b318016b87ac407900eb39a"
 
 # 5分ごとにNotionを確認
-CHECK_INTERVAL = 300
+CHECK_INTERVAL = 60
 
 app = Flask(__name__)
 
