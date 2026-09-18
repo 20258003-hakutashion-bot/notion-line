@@ -47,9 +47,10 @@ def check_notion():
     try:
 
         response = requests.post(
-    "https://www.google.com",
+    notion_url,
+    headers=notion_headers,
     timeout=10
-        )
+)
 
         print("Notion APIから返事が来ました！")
         print("Notion Status:", response.status_code)
