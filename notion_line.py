@@ -1,5 +1,8 @@
 import os
 import requests
+from flask import Flask
+
+app = Flask(__name__)
 
 NOTION_TOKEN = os.environ["NOTION_TOKEN"]
 LINE_TOKEN = os.environ["LINE_TOKEN"]
